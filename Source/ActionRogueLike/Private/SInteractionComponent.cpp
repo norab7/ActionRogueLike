@@ -48,9 +48,6 @@ void USInteractionComponent::PrimaryInteract() {
 
 	FVector End = EyeLocation + (EyeRotation.Vector() * InteractionDistance);
 
-	//FHitResult Hit;
-	// bool bBlockingHit = GetWorld()->LineTraceSingleByObjectType(Hit, EyeLocation, End, ObjectQueryParams);
-
 	TArray<FHitResult> Hits;
 	FCollisionShape CollisionShape;
 	float SphereRadius = 30.f;

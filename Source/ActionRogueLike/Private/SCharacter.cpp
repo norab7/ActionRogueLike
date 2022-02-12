@@ -4,6 +4,7 @@
 #include "SCharacter.h"
 
 #include "DrawDebugHelpers.h"
+#include "SAttributeComponent.h"
 #include "SInteractionComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -23,11 +24,14 @@ ASCharacter::ASCharacter() {
 	CameraComponent->SetupAttachment(SpringArmComponent);
 
 	InteractionComponent = CreateDefaultSubobject<USInteractionComponent>("InteractionComponent");
+	AttributeComponent = CreateDefaultSubobject<USAttributeComponent>("AttributeComponent");
 
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 
 	PrimaryAttackDelay = 0.2f;
+	HitFlashColor = FColor::White;
+	HitFlashSpeed = 2.f;
 
 }
 
@@ -59,31 +63,101 @@ void ASCharacter::MoveRight(float Value) {
 }
 
 void ASCharacter::PrimaryAttack() {
-	if (!ProjectileClass) {
-		UE_LOG(LogTemp, Warning, TEXT("ProjectileClassNULL"));
-		return;
-	}
-
 	PlayAnimMontage(AttackAnim);
-
 	GetWorldTimerManager().SetTimer(TimerHandle_PrimaryAttack, this, &ASCharacter::PrimaryAttackTimeElapsed, PrimaryAttackDelay);
 }
 
 void ASCharacter::PrimaryAttackTimeElapsed() {
-	FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
+	SpawnProjectile(ProjectileClass);
+}
 
-	FTransform SpawnTransform = FTransform(GetControlRotation(), HandLocation);
-	FActorSpawnParameters SpawnParameters;
-	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+void ASCharacter::BlackholeAttackTimeElapsed() {
+	SpawnProjectile(BlackholeClass);
+}
 
-	GetWorld()->SpawnActor<AActor>(ProjectileClass, SpawnTransform, SpawnParameters);
+void ASCharacter::DashAttackTimeElapsed() {
+	SpawnProjectile(DashClass);
+}
 
+void ASCharacter::SpawnProjectile(const TSubclassOf<AActor>& Projectile) {
+
+	if (ensure(Projectile)) {
+
+		// Locations
+		FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
+		FVector End = CameraComponent->GetComponentLocation() + (CameraComponent->GetComponentRotation().Vector() * 10000.f);
+
+		// Collision Params
+		FCollisionObjectQueryParams ObjectQueryParams;
+		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+		ObjectQueryParams.AddObjectTypesToQuery(ECC_Pawn);
+
+		// Collision Shape
+		FCollisionShape Shape;
+		Shape.SetSphere(20.f);
+
+		FCollisionQueryParams CollisionQueryParams;
+		CollisionQueryParams.AddIgnoredActor(this);
+
+		// Sphere Trace
+		FHitResult Hit;
+		bool bBlockingHit = GetWorld()->SweepSingleByObjectType(Hit, CameraComponent->GetComponentLocation(), End, FQuat::Identity, ObjectQueryParams, Shape, CollisionQueryParams);
+
+		// Spawn Transform
+		FRotator TargetRotation = GetControlRotation();
+		if (bBlockingHit) {
+			TargetRotation = (Hit.ImpactPoint - HandLocation).Rotation();
+		}
+		FTransform SpawnTransform = FTransform(TargetRotation, HandLocation);
+
+		// Spawn Params
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SpawnParameters.Instigator = this;
+
+		// Spawn Projectile
+		GetWorld()->SpawnActor<AActor>(Projectile, SpawnTransform, SpawnParameters);
+	}
+
+}
+
+void ASCharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComponent, float NewHealth, float Delta) {
+	if (NewHealth <= 0.f && Delta < 0.f) {
+		APlayerController* PC = Cast<APlayerController>(GetController());
+		DisableInput(PC);
+
+	} else {
+		if (Delta < 0.f) {
+			FVector NormalColor = FVector(HitFlashColor.R, HitFlashColor.G, HitFlashColor.B);
+			NormalColor.Normalize();
+			GetMesh()->SetVectorParameterValueOnMaterials(TEXT("HitFlashColor"), NormalColor);
+			GetMesh()->SetScalarParameterValueOnMaterials(TEXT("HitFlashSpeed"), HitFlashSpeed);
+			GetMesh()->SetScalarParameterValueOnMaterials(TEXT("TimeToHit"), GetWorld()->TimeSeconds);
+		}
+	}
+}
+
+void ASCharacter::PostInitializeComponents() {
+	Super::PostInitializeComponents();
+
+	AttributeComponent->OnHealthChanged.AddDynamic(this, &ASCharacter::OnHealthChanged);
 }
 
 void ASCharacter::PrimaryInteract() {
 	if (InteractionComponent) {
 		InteractionComponent->PrimaryInteract();
 	}
+}
+
+void ASCharacter::BlackholeAttack() {
+	PlayAnimMontage(AttackAnim);
+	GetWorldTimerManager().SetTimer(TimerHandle_BlackholeAttack, this, &ASCharacter::BlackholeAttackTimeElapsed, PrimaryAttackDelay);
+}
+
+void ASCharacter::DashAttack() {
+	PlayAnimMontage(AttackAnim);
+	GetWorldTimerManager().SetTimer(TimerHandle_DashAttack, this, &ASCharacter::DashAttackTimeElapsed, PrimaryAttackDelay);
 }
 
 // Called every frame
@@ -121,7 +195,11 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 
 	// Action
 	PlayerInputComponent->BindAction("PrimaryAttack", IE_Pressed, this, &ASCharacter::PrimaryAttack);
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ASCharacter::Jump);
 	PlayerInputComponent->BindAction("PrimaryInteract", IE_Pressed, this, &ASCharacter::PrimaryInteract);
+
+	PlayerInputComponent->BindAction("BlackholeAttack", IE_Pressed, this, &ASCharacter::BlackholeAttack);
+	PlayerInputComponent->BindAction("DashAttack", IE_Pressed, this, &ASCharacter::DashAttack);
+
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ASCharacter::Jump);
 }
 
