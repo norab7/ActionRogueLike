@@ -5,6 +5,9 @@
 
 #include "Components/SphereComponent.h"
 
+static TAutoConsoleVariable<bool> CVarAllowPickupOverlaps(TEXT("sl.PlayerPickupOnOverlap"), true, TEXT("Allows the player to collect pickups on overlapping them."));
+
+
 // Sets default values
 ASPickupBase::ASPickupBase() {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
@@ -13,6 +16,7 @@ ASPickupBase::ASPickupBase() {
 	// Properties
 	SphereRadius = 50.f;
 	RespawnDelay = 10.f;
+
 
 	// Components
 	BaseMesh = CreateDefaultSubobject<UStaticMeshComponent>("BaseMesh");
@@ -30,7 +34,7 @@ ASPickupBase::ASPickupBase() {
 
 
 void ASPickupBase::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
-	if (OtherActor) {
+	if (CVarAllowPickupOverlaps.GetValueOnGameThread() && OtherActor) {
 		if (APawn* OtherPawn = Cast<APawn>(OtherActor)) {
 			PawnPickup(OtherPawn);
 		}

@@ -6,36 +6,26 @@
 
 #include "DrawDebugHelpers.h"
 
+static TAutoConsoleVariable<bool> CVarDebugDrawInteraction(TEXT("sl.InteractionDebugDraw"), false, TEXT("Enable Debug Lines for Interact Component"), ECVF_Cheat);
+
+
 // Sets default values for this component's properties
 USInteractionComponent::USInteractionComponent() {
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.TickInterval = 0.1f;
 
 	// ...
 
-	InteractionDistance = 300.f;
+	InteractionDistance = 1000.f;
 
 }
 
 
-// Called when the game starts
-void USInteractionComponent::BeginPlay() {
-	Super::BeginPlay();
+void USInteractionComponent::FindBestInteractable() {
 
-	// ...
-
-}
-
-
-// Called every frame
-void USInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// ...
-}
-
-void USInteractionComponent::PrimaryInteract() {
+	bool bDebugDraw = CVarDebugDrawInteraction.GetValueOnGameThread();
 
 	FCollisionObjectQueryParams ObjectQueryParams;
 	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
@@ -57,19 +47,36 @@ void USInteractionComponent::PrimaryInteract() {
 	FColor LineColor = bBlockingHit ? FColor::Green : FColor::Red;
 
 	for (FHitResult Hit : Hits) {
-		DrawDebugSphere(GetWorld(), Hit.ImpactPoint, SphereRadius, 12, LineColor, false, 2.f);
+		if (bDebugDraw) {
+			DrawDebugSphere(GetWorld(), Hit.ImpactPoint, SphereRadius, 12, LineColor, false, 2.f);
+		}
 
 		AActor* HitActor = Hit.GetActor();
 		if (HitActor) {
 			if (HitActor->Implements<USGameplayInterface>()) {
-				APawn* MyPawn = Cast<APawn>(MyOwner);
-				ISGameplayInterface::Execute_Interact(HitActor, MyPawn);
+				FocusedActor = HitActor;
 				break;
 			}
 		}
 	}
 
-	DrawDebugLine(GetWorld(), EyeLocation, End, LineColor, false, 2.f, 0, 2.f);
+	if (bDebugDraw) {
+		DrawDebugLine(GetWorld(), EyeLocation, End, LineColor, false, 2.f, 0, 2.f);
+	}
+
+}
+
+void USInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) {
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	FindBestInteractable();
+
+}
+
+void USInteractionComponent::PrimaryInteract() {
+
+	//APawn* MyPawn = Cast<APawn>(MyOwner);
+	//ISGameplayInterface::Execute_Interact(HitActor, MyPawn);
 
 }
 

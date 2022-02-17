@@ -4,6 +4,7 @@
 #include "SCharacter.h"
 
 #include "DrawDebugHelpers.h"
+#include "SActionComponent.h"
 #include "SAttributeComponent.h"
 #include "SInteractionComponent.h"
 #include "Camera/CameraComponent.h"
@@ -25,19 +26,18 @@ ASCharacter::ASCharacter() {
 
 	InteractionComponent = CreateDefaultSubobject<USInteractionComponent>("InteractionComponent");
 	AttributeComponent = CreateDefaultSubobject<USAttributeComponent>("AttributeComponent");
+	ActionComponent = CreateDefaultSubobject<USActionComponent>("ActionComponent");
 
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 
-	PrimaryAttackDelay = 0.2f;
 	HitFlashColor = FColor::White;
 	HitFlashSpeed = 2.f;
 
-}
+	HitFlashColorName = "HitFlashColor";
+	HitFlashSpeedName = "HitFlashSpeed";
+	TimeToHitName = "TimeToHit";
 
-// Called when the game starts or when spawned
-void ASCharacter::BeginPlay() {
-	Super::BeginPlay();
 }
 
 void ASCharacter::MoveForward(float Value) {
@@ -62,66 +62,6 @@ void ASCharacter::MoveRight(float Value) {
 	AddMovementInput(ControlRightVector * Value);
 }
 
-void ASCharacter::PrimaryAttack() {
-	PlayAnimMontage(AttackAnim);
-	GetWorldTimerManager().SetTimer(TimerHandle_PrimaryAttack, this, &ASCharacter::PrimaryAttackTimeElapsed, PrimaryAttackDelay);
-}
-
-void ASCharacter::PrimaryAttackTimeElapsed() {
-	SpawnProjectile(ProjectileClass);
-}
-
-void ASCharacter::BlackholeAttackTimeElapsed() {
-	SpawnProjectile(BlackholeClass);
-}
-
-void ASCharacter::DashAttackTimeElapsed() {
-	SpawnProjectile(DashClass);
-}
-
-void ASCharacter::SpawnProjectile(const TSubclassOf<AActor>& Projectile) {
-
-	if (ensure(Projectile)) {
-
-		// Locations
-		FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
-		FVector End = CameraComponent->GetComponentLocation() + (CameraComponent->GetComponentRotation().Vector() * 10000.f);
-
-		// Collision Params
-		FCollisionObjectQueryParams ObjectQueryParams;
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
-		ObjectQueryParams.AddObjectTypesToQuery(ECC_Pawn);
-
-		// Collision Shape
-		FCollisionShape Shape;
-		Shape.SetSphere(20.f);
-
-		FCollisionQueryParams CollisionQueryParams;
-		CollisionQueryParams.AddIgnoredActor(this);
-
-		// Sphere Trace
-		FHitResult Hit;
-		bool bBlockingHit = GetWorld()->SweepSingleByObjectType(Hit, CameraComponent->GetComponentLocation(), End, FQuat::Identity, ObjectQueryParams, Shape, CollisionQueryParams);
-
-		// Spawn Transform
-		FRotator TargetRotation = GetControlRotation();
-		if (bBlockingHit) {
-			TargetRotation = (Hit.ImpactPoint - HandLocation).Rotation();
-		}
-		FTransform SpawnTransform = FTransform(TargetRotation, HandLocation);
-
-		// Spawn Params
-		FActorSpawnParameters SpawnParameters;
-		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		SpawnParameters.Instigator = this;
-
-		// Spawn Projectile
-		GetWorld()->SpawnActor<AActor>(Projectile, SpawnTransform, SpawnParameters);
-	}
-
-}
-
 void ASCharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComponent, float NewHealth, float Delta) {
 	if (NewHealth <= 0.f && Delta < 0.f) {
 		APlayerController* PC = Cast<APlayerController>(GetController());
@@ -131,9 +71,9 @@ void ASCharacter::OnHealthChanged(AActor* InstigatorActor, USAttributeComponent*
 		if (Delta < 0.f) {
 			FVector NormalColor = FVector(HitFlashColor.R, HitFlashColor.G, HitFlashColor.B);
 			NormalColor.Normalize();
-			GetMesh()->SetVectorParameterValueOnMaterials(TEXT("HitFlashColor"), NormalColor);
-			GetMesh()->SetScalarParameterValueOnMaterials(TEXT("HitFlashSpeed"), HitFlashSpeed);
-			GetMesh()->SetScalarParameterValueOnMaterials(TEXT("TimeToHit"), GetWorld()->TimeSeconds);
+			GetMesh()->SetVectorParameterValueOnMaterials(HitFlashColorName, NormalColor);
+			GetMesh()->SetScalarParameterValueOnMaterials(HitFlashSpeedName, HitFlashSpeed);
+			GetMesh()->SetScalarParameterValueOnMaterials(TimeToHitName, GetWorld()->TimeSeconds);
 		}
 	}
 }
@@ -144,20 +84,35 @@ void ASCharacter::PostInitializeComponents() {
 	AttributeComponent->OnHealthChanged.AddDynamic(this, &ASCharacter::OnHealthChanged);
 }
 
+FVector ASCharacter::GetPawnViewLocation() const {
+	return CameraComponent->GetComponentLocation();
+}
+
 void ASCharacter::PrimaryInteract() {
 	if (InteractionComponent) {
 		InteractionComponent->PrimaryInteract();
 	}
 }
 
+void ASCharacter::PrimaryAttack() {
+	ActionComponent->StartActionByName(this, "PrimaryAttack");
+}
+
 void ASCharacter::BlackholeAttack() {
-	PlayAnimMontage(AttackAnim);
-	GetWorldTimerManager().SetTimer(TimerHandle_BlackholeAttack, this, &ASCharacter::BlackholeAttackTimeElapsed, PrimaryAttackDelay);
+	ActionComponent->StartActionByName(this, "BlackHoleAttack");
 }
 
 void ASCharacter::DashAttack() {
-	PlayAnimMontage(AttackAnim);
-	GetWorldTimerManager().SetTimer(TimerHandle_DashAttack, this, &ASCharacter::DashAttackTimeElapsed, PrimaryAttackDelay);
+	ActionComponent->StartActionByName(this, "DashAttack");
+}
+
+void ASCharacter::SprintStart() {
+	ActionComponent->StartActionByName(this, "Sprint");
+}
+
+void ASCharacter::SprintStop() {
+	ActionComponent->StopActionByName(this, "Sprint");
+
 }
 
 // Called every frame
@@ -167,7 +122,6 @@ void ASCharacter::Tick(float DeltaTime) {
 	// -- Rotation Visualization -- //
 	const float DrawScale = 100.0f;
 	const float Thickness = 5.0f;
-
 	FVector LineStart = GetActorLocation();
 	// Offset to the right of pawn
 	LineStart += GetActorRightVector() * 100.0f;
@@ -175,7 +129,6 @@ void ASCharacter::Tick(float DeltaTime) {
 	FVector ActorDirection_LineEnd = LineStart + (GetActorForwardVector() * 100.0f);
 	// Draw Actor's Direction
 	DrawDebugDirectionalArrow(GetWorld(), LineStart, ActorDirection_LineEnd, DrawScale, FColor::Yellow, false, 0.0f, 0, Thickness);
-
 	FVector ControllerDirection_LineEnd = LineStart + (GetControlRotation().Vector() * 100.0f);
 	// Draw 'Controller' Rotation ('PlayerController' that 'possessed' this character)
 	DrawDebugDirectionalArrow(GetWorld(), LineStart, ControllerDirection_LineEnd, DrawScale, FColor::Green, false, 0.0f, 0, Thickness);
@@ -201,5 +154,14 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	PlayerInputComponent->BindAction("DashAttack", IE_Pressed, this, &ASCharacter::DashAttack);
 
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ASCharacter::Jump);
+	PlayerInputComponent->BindAction("Sprint", IE_Pressed, this, &ASCharacter::SprintStart);
+	PlayerInputComponent->BindAction("Sprint", IE_Released, this, &ASCharacter::SprintStop);
+
+}
+
+void ASCharacter::HealSelf(float Amount /* 100 */) {
+
+	AttributeComponent->ApplyHealthChange(this, Amount);
+
 }
 

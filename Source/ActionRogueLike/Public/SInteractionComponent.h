@@ -16,16 +16,17 @@ public:
 	USInteractionComponent();
 
 protected:
-	// Called when the game starts
-	virtual void BeginPlay() override;
 
 	UPROPERTY(EditAnywhere)
 		float InteractionDistance;
+	UPROPERTY()
+		AActor* FocusedActor;
+
+	void FindBestInteractable();
 
 public:
-	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	void PrimaryInteract();
 
 };

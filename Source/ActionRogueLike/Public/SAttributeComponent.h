@@ -16,6 +16,12 @@ public:
 	// Sets default values for this component's properties
 	USAttributeComponent();
 
+	UFUNCTION(BlueprintCallable, Category = "Attributes")
+		static USAttributeComponent* GetAttributes(AActor* FromActor);
+
+	UFUNCTION(BlueprintCallable, Category = "Attributes", meta = (DisplayName = "IsAlive"))
+		static bool IsActorAlive(AActor* Actor);
+
 protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attributes")
@@ -35,13 +41,16 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 		float GetMaxHealth() const;
 	UFUNCTION(BlueprintCallable, BlueprintPure)
+		float GetMissingHealth() const;
+	UFUNCTION(BlueprintCallable, BlueprintPure)
 		bool IsMaxHealth() const;
+
+	UFUNCTION(BlueprintCallable)
+		bool Kill(AActor* Instigator);
 
 	UPROPERTY(BlueprintAssignable)
 		FOnHealthChanged OnHealthChanged;
 	UFUNCTION(BlueprintCallable, Category = "Attributes")
-		bool ApplyHealthChange(float Delta);
-
-
+		bool ApplyHealthChange(AActor* InstigatorActor, float Delta);
 
 };

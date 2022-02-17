@@ -6,6 +6,8 @@
 #include "GameFramework/Character.h"
 #include "SCharacter.generated.h"
 
+class USActionComponent;
+class USCurrencyComponent;
 class USAttributeComponent;
 class ASProjectileBase;
 class UCameraComponent;
@@ -22,40 +24,31 @@ public:
 	ASCharacter();
 
 protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
 
 	// Components
-	UPROPERTY(VisibleAnywhere, Category = "SCharacter")
+	UPROPERTY(VisibleAnywhere, Category = "Components")
 		USpringArmComponent* SpringArmComponent;
-	UPROPERTY(VisibleAnywhere, Category = "SCharacter")
+	UPROPERTY(VisibleAnywhere, Category = "Components")
 		UCameraComponent* CameraComponent;
-	UPROPERTY(VisibleAnywhere, Category = "SCharacter")
+	UPROPERTY(VisibleAnywhere, Category = "Components")
 		USInteractionComponent* InteractionComponent;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SCharacter")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 		USAttributeComponent* AttributeComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+		USActionComponent* ActionComponent;
 
 	// Properties
-	UPROPERTY(EditAnywhere, Category = "Attack")
-		TSubclassOf<AActor> ProjectileClass;
-	UPROPERTY(EditAnywhere, Category = "Attack")
-		TSubclassOf<AActor> BlackholeClass;
-	UPROPERTY(EditAnywhere, Category = "Attack")
-		TSubclassOf<AActor> DashClass;
-	UPROPERTY(EditAnywhere, Category = "Attack")
-		UAnimMontage* AttackAnim;
-
-	UPROPERTY(EditAnywhere, Category = "Attack")
-		float PrimaryAttackDelay;
-	UPROPERTY(EditAnywhere, Category = "Attack")
+	UPROPERTY(EditAnywhere, Category = "Effects")
 		FColor HitFlashColor;
-	UPROPERTY(EditAnywhere, Category = "Attack")
+	UPROPERTY(EditAnywhere, Category = "Effects")
 		float HitFlashSpeed;
 
-	// Timers
-	FTimerHandle TimerHandle_PrimaryAttack;
-	FTimerHandle TimerHandle_BlackholeAttack;
-	FTimerHandle TimerHandle_DashAttack;
+	UPROPERTY(VisibleAnywhere, Category = "Effects")
+		FName HitFlashColorName;
+	UPROPERTY(VisibleAnywhere, Category = "Effects")
+		FName HitFlashSpeedName;
+	UPROPERTY(VisibleAnywhere, Category = "Effects")
+		FName TimeToHitName;
 
 	// Functions
 	void MoveForward(float Value);
@@ -67,16 +60,15 @@ protected:
 	void BlackholeAttack();
 	void DashAttack();
 
-	void PrimaryAttackTimeElapsed();
-	void BlackholeAttackTimeElapsed();
-	void DashAttackTimeElapsed();
-
-	void SpawnProjectile(const TSubclassOf<AActor>& Projectile);
+	void SprintStart();
+	void SprintStop();
 
 	UFUNCTION()
 		void OnHealthChanged(AActor* InstigatorActor, USAttributeComponent* OwningComponent, float NewHealth, float Delta);
 
 	virtual void PostInitializeComponents() override;
+
+	virtual FVector GetPawnViewLocation() const override;
 
 public:
 	// Called every frame
@@ -84,5 +76,8 @@ public:
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	UFUNCTION(Exec)
+		void HealSelf(float Amount = 100.f);
 
 };

@@ -4,7 +4,9 @@
 #include "SHealthPotion.h"
 
 #include "SAttributeComponent.h"
+#include "SPlayerState.h"
 
+static TAutoConsoleVariable<bool> CVarPickupCostsActive(TEXT("sl.PickupCostsActive"), true, TEXT("Enabled cost checks for pickup up items."));
 
 // Sets default values
 ASHealthPotion::ASHealthPotion() {
@@ -12,22 +14,29 @@ ASHealthPotion::ASHealthPotion() {
 	PrimaryActorTick.bCanEverTick = true;
 
 	HealthValue = 10.f;
-
+	CreditCost = 5;
 }
 
 
 void ASHealthPotion::PawnPickup(APawn* PawnToPickup) {
 	Super::PawnPickup(PawnToPickup);
 
-	if (ensure(PawnToPickup)) {
-		USAttributeComponent* AttributeComponent = Cast<USAttributeComponent>(PawnToPickup->GetComponentByClass(USAttributeComponent::StaticClass()));
-		if (ensure(AttributeComponent) && !AttributeComponent->IsMaxHealth()) {
+	if (!ensure(PawnToPickup)) {
+		return;
+	}
 
-			FTimerHandle TimerHandle_RespawnDelay;
-			GetWorldTimerManager().SetTimer(TimerHandle_RespawnDelay, this, &ASHealthPotion::RespawnPickup, RespawnDelay);
+	USAttributeComponent* AttributeComponent = USAttributeComponent::GetAttributes(PawnToPickup);
+	if (ensure(AttributeComponent) && !AttributeComponent->IsMaxHealth()) {
 
-			AttributeComponent->ApplyHealthChange(HealthValue);
+		if (ASPlayerState* PlayerState = PawnToPickup->GetPlayerState<ASPlayerState>()) {
 
+			if (PlayerState->RemoveCredits(CreditCost) && AttributeComponent->ApplyHealthChange(this, HealthValue)) {
+
+				FTimerHandle TimerHandle_RespawnDelay;
+				GetWorldTimerManager().SetTimer(TimerHandle_RespawnDelay, this, &ASHealthPotion::RespawnPickup, RespawnDelay);
+
+
+			}
 		}
 	}
 }

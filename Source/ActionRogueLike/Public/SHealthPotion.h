@@ -20,6 +20,8 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly)
 		float HealthValue;
+	UPROPERTY(EditDefaultsOnly, Category = "Currency")
+		int32 CreditCost;
 
 	virtual void PawnPickup(APawn* PawnToPickup) override;
 	virtual void RespawnPickup() override;
